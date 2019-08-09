@@ -7,20 +7,20 @@ from scipy.cluster.vq import kmeans2
 import numpy as np
 import os, time, pickle, argparse
 import networkx as nx
-
+import pandas as pd
 
 class SSLExperimentNoisy(object):
     def __init__(self, data_name, random_seed, adj_name):
         self.data_name = data_name.lower()
         self.random_seed = int(random_seed); np.random.seed(self.random_seed); tf.set_random_seed(self.random_seed)
-        self_adj_name = adj_name
+        self.adj_name = adj_name
 
         # Load data
         self.adj_mat, self.node_features, self.x_tr, self.y_tr, self.x_val, self.y_val, self.x_test, self.y_test \
             = load_data_ssl(self.data_name)
 
         # loads noisy adjacency
-        self.adj_mat_noisy = self.load_noisy_adjacency(self_adj_name)
+        self.adj_mat_noisy = self.load_noisy_adjacency(self.adj_name)
 
         # Init kernel
         k = SparseGraphPolynomial(self.adj_mat_noisy, self.node_features, self.x_tr, degree=3.)
@@ -101,30 +101,155 @@ class SSLExperimentNoisy(object):
             self.m.optimize(method=self.optimizer, maxiter=maxiter - self.iter, callback=self._callback)
         print '{0} iterations completed.'.format(self.iter)
 
-    def evaluate(self):
+    def evaluate(self, results_dir):
         print '\nEvaluating prediction accuracies...'
         # Restore the parameters to the one with the best ELBO
         tmp_params = self.m.get_free_state().copy()
         self.m.set_state(pickle.load(open(self.param_fp, 'rb'))['log_param'])
-        tr_acc = np.sum(np.argmax(self.m.predict_y(self.x_tr)[0], 1) == self.y_tr.flatten())*100./len(self.y_tr)
-        test_acc = np.sum(np.argmax(self.m.predict_y(self.x_test)[0], 1) == self.y_test.flatten())*100./len(self.y_test)
-        print 'Prediction Accuracies: '
-        print '\tTraining Set: {0:.2f}%'.format(tr_acc)
-        print '\tTest Set: {0:.2f}%'.format(test_acc)
+        pred_train = self.m.predict_y(self.x_tr)[0]
+        pred_test = self.m.predict_y(self.x_test)[0]
+        ytrain =  self.y_tr.flatten()
+        ytest = self.y_test.flatten()
+
+        tr_acc = evaluate_accuracy(ytrain, pred_train)
+        test_acc = evaluate_accuracy(ytest, pred_test)
+
+        tr_mnlp = evaluate_mnlp(ytrain, pred_train)
+        test_mnlp = evaluate_mnlp(ytest, pred_test)
+
+        print 'Prediction metrics: '
+        print '\tTraining Accuracy: {0:.4f}'.format(tr_acc)
+        print '\tTest Accuracy: {0:.4f}'.format(test_acc)
+        print '\tTraining MNLP: {0:.4f}'.format(tr_mnlp)
+        print '\tTest MNLP: {0:.4f}'.format(test_mnlp)
+
+        write_test_predictions(ytest, pred_test, test_acc, test_mnlp, results_dir, os.path.basename(self.adj_name))
         # Revert the parameters to the original values
         self.m.set_state(tmp_params)
         return {'train': tr_acc, 'test': test_acc}
+
+
+def evaluate_accuracy(ytrue, ypred):
+
+    """
+    :param ytrue: Nx1 array of labels
+    :param ypred: NxK array of predicted probabilities
+    :return:
+
+
+    """
+    return np.mean(np.argmax(ypred, 1) == ytrue)
+
+
+def evaluate_mnlp(ytrue, ypred):
+    """
+    :param ytrue: Nx1 array of labels. ytrue \in [0, K-1], where K=# classes
+    :param ypred: NxK array of predicted probabilities
+    :return:
+    """
+    probs = ypred[range(ypred.shape[0]), ytrue]
+    return - np.mean(np.log(probs))
+
+
+def write_test_predictions(ytrue, ypred, test_acc, test_mnlp, results_dir, fname):
+    """
+    :param ytrue: Nx1 array of labels. ytrue \in [0, K-1], where K=# classes
+    :param ypred: NxK array of predicted probabilities
+    :return:
+    """
+    if results_dir is not None:
+        if not os.path.exists(os.path.expanduser(results_dir)):
+            print("Results dir does not exist.")
+            print("Creating results dir at {}".format(os.path.expanduser(results_dir)))
+            os.makedirs(os.path.expanduser(results_dir))
+            print(
+                "Created results directory: {}".format(os.path.expanduser(results_dir))
+            )
+        else:
+            print("Results directory already exists.")
+
+    label_pred = np.argmax(ypred, 1)
+    df = pd.DataFrame({'y_true': ytrue, 'y_pred': label_pred})
+    for ind, col in enumerate(ypred.transpose()):
+        df['y_pred_{}'.format(ind)] = col
+
+    predictions_filename = os.path.join(os.path.expanduser(results_dir), fname + "_predictions.csv")
+    df.to_csv(predictions_filename, index=None)
+
+    perf_filename = os.path.join(os.path.expanduser(results_dir), fname + "_results.csv")
+    header = "accuracy_test,  mnlp_test"
+
+    try:
+        fh_results = open(perf_filename, "w", buffering=1)
+        fh_results.write(header + "\n")
+        results_str = "{:04f}, {:04f}\n".format(test_acc, test_mnlp)
+        fh_results.write(results_str)
+
+    except IOError:
+        print("Could not open results file {}".format(perf_filename))
+        return 0  # probably should return something other than success!
+
+    return
+
+
+# def get_results_handler(results_dir, header, params):
+#
+#     # setup writing results to disk
+#     fh_results = None
+#     if results_dir is not None:
+#         if not os.path.exists(os.path.expanduser(results_dir)):
+#             print("Results dir does not exist.")
+#             print("Creating results dir at {}".format(os.path.expanduser(results_dir)))
+#             os.makedirs(os.path.expanduser(results_dir))
+#             print(
+#                 "Created results directory: {}".format(os.path.expanduser(results_dir))
+#             )
+#         else:
+#             print("Results directory already exists.")
+#
+#         # write parameters file
+#         params_filename = os.path.join(os.path.expanduser(results_dir),  "params.csv")
+#         try:
+#             with open(params_filename, "w", buffering=1) as fh_params:
+#                 w = csv.DictWriter(fh_params, params.keys())
+#                 w.writeheader()
+#                 w.writerow(params)
+#
+#         except IOError:
+#             print("Could not open results file {}".format(params_filename))
+#
+#         # write headers on results file
+#         results_filename = os.path.join(
+#             os.path.expanduser(results_dir),  "results.csv"
+#         )
+#
+#         try:
+#             fh_results = open(results_filename, "w", buffering=1)
+#             # write the column names
+#             fh_results.write(
+#                 header + "\n"
+#             )
+#         except IOError:
+#             print("Could not open results file {}".format(results_filename))
+#             return 0  # probably should return something other than success!
+#     return fh_results
+
+
+
+
+
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("data", help="data set name [cora|citeseer|pubmed]", type=str)
     parser.add_argument("rs", help="random seed [integer]", type=int)
     parser.add_argument("adj", help="name of adjacency matrix file [string]", type=str)
+    parser.add_argument("results_dir", help="name of results dir [string]", type=str)
 
     parser = parser.parse_args()
     exp_obj = SSLExperimentNoisy(parser.data, parser.rs, parser.adj)
     exp_obj.train(10000, check_obj_every_n_iter=200)
-    exp_obj.evaluate()
+    exp_obj.evaluate(parser.results_dir)
 
 
 if __name__ == "__main__":
