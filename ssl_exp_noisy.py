@@ -40,7 +40,10 @@ class SSLExperimentNoisy(object):
         self.param_fp = os.path.join(os.getenv('PWD'), 'ssl_param_files')
         if not (os.path.isdir(self.param_fp)):
             os.mkdir(self.param_fp)
-        self.param_fp = os.path.join(self.param_fp, 'SSL-{0}-rs_{1}.p'.format(self.data_name, random_seed))
+
+        #self.param_fp = os.path.join(self.param_fp, 'SSL-{0}-rs_{1}.p'.format(self.data_name, random_seed))
+        self.param_fp = os.path.join(self.param_fp, os.path.basename(adj_name) + '-rs_{0}.p'.format(random_seed))
+
         self.m._compile(self.optimizer)
         if os.path.isfile(self.param_fp):
             print 'Param. file already exists! Loading from {0}.'.format(self.param_fp)
