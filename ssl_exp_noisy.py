@@ -126,7 +126,8 @@ class SSLExperimentNoisy(object):
         print '\tTraining MNLP: {0:.4f}'.format(tr_mnlp)
         print '\tTest MNLP: {0:.4f}'.format(test_mnlp)
 
-        write_test_predictions(ytest, pred_test, test_acc, test_mnlp, results_dir, os.path.basename(self.adj_name))
+        fout = os.path.basename(self.adj_name) + "_seed_" + str(self.random_seed)
+        write_test_predictions(ytest, pred_test, test_acc, test_mnlp, results_dir, fout)
         # Revert the parameters to the original values
         self.m.set_state(tmp_params)
         return {'train': tr_acc, 'test': test_acc}
