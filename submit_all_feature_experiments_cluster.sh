@@ -14,10 +14,10 @@
 #
 module load cuda/10.0.130
 module load cudnn/v7.5.0-cuda92
-module load python/3.6.1
-pip install --user tensorflow-gpu==1.13.1
-pip install --user tensorflow_probability==0.5.0
-pip install --user networkx==2.1
+module load python/2.7.13
+
+pip install --user tensorflow-gpu==1.14.0
+pip install --user networkx==2.2
 
 # THis seems like a good alternative to installing things but let's stick to Pantelis' settings so all experiments
 # are run equally
