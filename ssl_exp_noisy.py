@@ -8,16 +8,20 @@ import numpy as np
 import os, time, pickle, argparse
 import networkx as nx
 import pandas as pd
+import csv
+
 
 class SSLExperimentNoisy(object):
-    def __init__(self, data_name, random_seed, adj_name):
+
+    def __init__(self, data_name, random_seed, adj_name, add_val=False, seed_val=1, p=0.5, results_dir='./results'):
         self.data_name = data_name.lower()
         self.random_seed = int(random_seed); np.random.seed(self.random_seed); tf.set_random_seed(self.random_seed)
         self.adj_name = adj_name
+        self.results_dir = results_dir
 
         # Load data
         self.adj_mat, self.node_features, self.x_tr, self.y_tr, self.x_val, self.y_val, self.x_test, self.y_test \
-            = load_data_ssl(self.data_name)
+            = load_data_ssl(self.data_name, add_val, seed_val, p)
 
         # loads noisy adjacency
         self.adj_mat_noisy = self.load_noisy_adjacency(self.adj_name)
@@ -37,7 +41,7 @@ class SSLExperimentNoisy(object):
         self.last_ts = time.time()
         self.iter = 0; self.check_obj_every = 200
         self.log_iter = []; self.log_t = []; self.log_obj = []; self.log_param = None; self.log_opt_state = None;
-        self.param_fp = os.path.join(os.getenv('PWD'), 'ssl_param_files')
+        self.param_fp = os.path.join(self.results_dir, 'ssl_param_files')
         if not (os.path.isdir(self.param_fp)):
             os.mkdir(self.param_fp)
 
@@ -126,8 +130,9 @@ class SSLExperimentNoisy(object):
         print '\tTraining MNLP: {0:.4f}'.format(tr_mnlp)
         print '\tTest MNLP: {0:.4f}'.format(test_mnlp)
 
-        fout = os.path.basename(self.adj_name) + "_seed_" + str(self.random_seed)
-        write_test_predictions(ytest, pred_test, test_acc, test_mnlp, results_dir, fout)
+        #fout = os.path.basename(self.adj_name) + "_seed_" + str(self.random_seed)
+
+        write_test_predictions(ytest, pred_test, test_acc, test_mnlp, results_dir)
         # Revert the parameters to the original values
         self.m.set_state(tmp_params)
         return {'train': tr_acc, 'test': test_acc}
@@ -155,7 +160,7 @@ def evaluate_mnlp(ytrue, ypred):
     return - np.mean(np.log(probs))
 
 
-def write_test_predictions(ytrue, ypred, test_acc, test_mnlp, results_dir, fname):
+def write_test_predictions(ytrue, ypred, test_acc, test_mnlp, results_dir):
     """
     :param ytrue: Nx1 array of labels. ytrue \in [0, K-1], where K=# classes
     :param ypred: NxK array of predicted probabilities
@@ -177,10 +182,10 @@ def write_test_predictions(ytrue, ypred, test_acc, test_mnlp, results_dir, fname
     for ind, col in enumerate(ypred.transpose()):
         df['y_pred_{}'.format(ind)] = col
 
-    predictions_filename = os.path.join(os.path.expanduser(results_dir), fname + "_predictions.csv")
+    predictions_filename = os.path.join(os.path.expanduser(results_dir),  "predictions.csv")
     df.to_csv(predictions_filename, index=None)
 
-    perf_filename = os.path.join(os.path.expanduser(results_dir), fname + "_results.csv")
+    perf_filename = os.path.join(os.path.expanduser(results_dir), "results.csv")
     header = "accuracy_test,  mnlp_test"
 
     try:
@@ -239,20 +244,51 @@ def write_test_predictions(ytrue, ypred, test_acc, test_mnlp, results_dir, fname
 #     return fh_results
 
 
+def save_parameters(params, results_dir):
+    if results_dir is not None:
+        if not os.path.exists(os.path.expanduser(results_dir)):
+            print("Results dir does not exist.")
+            print("Creating results dir at {}".format(os.path.expanduser(results_dir)))
+            os.makedirs(os.path.expanduser(results_dir))
+            print(
+                "Created results directory: {}".format(os.path.expanduser(results_dir))
+            )
+        else:
+            print("Results directory already exists.")
 
+        # write parameters file
+        params_filename = os.path.join(os.path.expanduser(results_dir),  "params.csv")
+        try:
+            with open(params_filename, "w", buffering=1) as fh_params:
+                w = csv.DictWriter(fh_params, params.keys())
+                w.writeheader()
+                w.writerow(params)
+
+        except IOError:
+            print("Could not open results file {}".format(params_filename))
+    return
 
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("data", help="data set name [cora|citeseer|pubmed]", type=str)
-    parser.add_argument("rs", help="random seed [integer]", type=int)
-    parser.add_argument("adj", help="name of adjacency matrix file [string]", type=str)
+    parser.add_argument("dataset", help="data set name [cora|citeseer|pubmed]", type=str)
+    parser.add_argument("epochs", help="Number of epochs [int]", type=int)
+    parser.add_argument("global_seed", help="random seed [integer]", type=int)
+    parser.add_argument("adjacency", help="name of adjacency matrix file [string]", type=str)
+    parser.add_argument("add_val", help="whether to add validation data for training [bool]", type=bool)
+    parser.add_argument("val_seed", help="Seed for including validation data in training [int]", type=int)
     parser.add_argument("results_dir", help="name of results dir [string]", type=str)
 
     parser = parser.parse_args()
-    exp_obj = SSLExperimentNoisy(parser.data, parser.rs, parser.adj)
-    exp_obj.train(10000, check_obj_every_n_iter=200)
+
+    params = dict(parser._get_kwargs())
+    save_parameters(params, parser.results_dir)
+
+    exp_obj = SSLExperimentNoisy(parser.dataset, parser.global_seed, parser.adjacency,
+                                 parser.add_val, parser.val_seed, p=0.5,
+                                 results_dir=parser.results_dir)
+    exp_obj.train(parser.epochs, check_obj_every_n_iter=200)
     exp_obj.evaluate(parser.results_dir)
 
 

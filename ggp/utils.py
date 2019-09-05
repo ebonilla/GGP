@@ -132,8 +132,43 @@ def load_data(dataset_str, active_learning = False):
     else:
         return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
 
-def load_data_ssl(data_name):
+
+def add_val_to_train(mask_train, mask_val, seed_val, p=0.5):
+    """
+    Add a percentage of the validation set to the training set
+    :param mask_train:
+    :param mask_val:
+    :param seed_val:
+    :param p: Probability of a point in validation to be addded in training
+    :return:
+    """
+    print("Adding some validation data to training")
+    rnd_val = np.random.RandomState(seed_val)
+    chs = rnd_val.choice([True, False], size=np.sum(mask_val), p=[p, 1.0 - p])
+    mask_val_new = np.array(mask_val)
+    mask_train_new = np.array(mask_train)
+    mask_val_new[mask_val_new] = chs
+    mask_train_new[mask_val] = ~chs
+    return mask_train_new, mask_val_new
+
+
+def load_data_ssl(data_name, add_val=False, seed_val=1, p=0.5):
     adj_csr, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(data_name)
+
+    if add_val:
+        train_mask, val_mask = add_val_to_train(train_mask, val_mask, seed_val, p)
+
+        print(
+            "**********************************************************************************************"
+        )
+        print(
+            "train size: {} val size: {} test size: {}".format(np.sum(train_mask), np.sum(val_mask), np.sum(test_mask)
+            )
+        )
+        print(
+            "**********************************************************************************************"
+        )
+
     adj_mat = np.asarray(adj_csr.toarray(), dtype=np_float_type)
     x_tr = np.reshape(np.arange(len(train_mask))[train_mask], (-1, 1))
     x_val = np.reshape(np.arange(len(val_mask))[val_mask], (-1, 1))
