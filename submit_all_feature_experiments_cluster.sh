@@ -12,12 +12,14 @@
 # use e.g. sbatch -a 0-999 submit_all_noisy_experiments_bracewell.sh
 # where 0-999 are the range of the indices of the jobs
 #
-module load cuda/10.0.130
-module load cudnn/v7.5.0-cuda92
-module load python/2.7.13
+#module load cuda/10.0.130
+#module load cudnn/v7.5.0-cuda92
+#module load python/2.7.13
 
-pip install --user tensorflow-gpu==1.14.0
-pip install --user networkx==2.2
+#pip install --user tensorflow-gpu==1.14.0
+#pip install --user networkx==2.2
+
+source ~/graphGP-env/bin/activate
 
 # THis seems like a good alternative to installing things but let's stick to Pantelis' settings so all experiments
 # are run equally
