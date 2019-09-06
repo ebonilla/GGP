@@ -80,7 +80,7 @@ then
     ADJ_MATRIX='Dataset/featured_based_datasets_compatible/'$DATASET_NAME'/'$BASENAME'.gpickle'
 
     str_options=$DATASET_NAME' '$EPOCHS' '$RANDOM_SEED' '$ADJ_MATRIX' '$ADD_VAL' '$SEED_VAL
-    name=$DATASET_NAME'/feature_based/'$MODEL'/n_hidden'$N_HIDDEN'/n_neighbour'$N_NEIGHBOUR'/v'$SEED_VAL
+    name=$DATASET_NAME'/'$MODEL'/feature_based''/n_hidden'$N_HIDDEN'/n_neighbour'$N_NEIGHBOUR'/v'$SEED_VAL
 
     RESULTS_DIR=$RESULTS_DIR'/'$name
     mkdir -p $RESULTS_DIR

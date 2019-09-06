@@ -9,6 +9,7 @@ import GPflow
 float_type = GPflow.settings.dtypes.float_type
 np_float_type = np.float32 if float_type == tf.float32 else np.float64
 
+
 def dlfile(url, local_file_path):
     # Open the url
     try:
@@ -22,6 +23,7 @@ def dlfile(url, local_file_path):
         print "HTTP Error:", e.code, url
     except URLError, e:
         print "URL Error:", e.reason, url
+
 
 def check_and_download_dataset(data_name):
     dataset_dir = os.path.join(os.getenv('PWD'), 'Dataset')
@@ -43,6 +45,7 @@ def check_and_download_dataset(data_name):
         zip_handler.close()
         return True
 
+
 def parse_index_file(filename):
     """Parse index file."""
     index = []
@@ -50,11 +53,13 @@ def parse_index_file(filename):
         index.append(int(line.strip()))
     return index
 
+
 def sample_mask(idx, l):
     """Create mask."""
     mask = np.zeros(l)
     mask[idx] = 1
     return np.array(mask, dtype=np.bool)
+
 
 def sparse_to_tuple(sparse_mx):
     """Convert sparse matrix to tuple representation."""
@@ -74,8 +79,14 @@ def sparse_to_tuple(sparse_mx):
 
     return sparse_mx
 
-def load_data(dataset_str, active_learning = False):
-    """Load data."""
+
+def load_data_original(dataset_str, active_learning = False):
+    """
+    Load data with fixed split as in Planetoid
+    :param dataset_str:
+    :param active_learning:
+    :return:
+    """
     data_path = os.getenv('PWD')+'/Dataset/citation_networks/'
     check_and_download_dataset('citation_networks')
     names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'graph']
@@ -133,6 +144,96 @@ def load_data(dataset_str, active_learning = False):
         return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
 
 
+def load_base_data(dataset_str):
+    data_path = os.getenv('PWD')+'/Dataset/citation_networks/'
+    check_and_download_dataset('citation_networks')
+    names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'graph']
+    objects = []
+    for i in range(len(names)):
+        with open(data_path + "ind.{}.{}".format(dataset_str, names[i]), 'rb') as f:
+            if sys.version_info > (3, 0):
+                objects.append(pkl.load(f, encoding='latin1'))
+            else:
+                objects.append(pkl.load(f))
+
+    x, y, tx, ty, allx, ally, graph = tuple(objects)
+    test_idx_reorder = parse_index_file(data_path + "ind.{}.test.index".format(dataset_str))
+    test_idx_range = np.sort(test_idx_reorder)
+
+    if dataset_str == 'citeseer':
+        # Fix citeseer dataset (there are some isolated nodes in the graph)
+        # Find isolated nodes, add them as zero-vecs into the right position
+        test_idx_range_full = range(min(test_idx_reorder), max(test_idx_reorder)+1)
+        tx_extended = sp.lil_matrix((len(test_idx_range_full), x.shape[1]))
+        tx_extended[test_idx_range-min(test_idx_range), :] = tx
+        tx = tx_extended
+        ty_extended = np.zeros((len(test_idx_range_full), y.shape[1]))
+        ty_extended[test_idx_range-min(test_idx_range), :] = ty
+        ty = ty_extended
+
+    features = sp.vstack((allx, tx)).tolil()
+    features[test_idx_reorder, :] = features[test_idx_range, :]
+    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
+
+    labels = np.vstack((ally, ty))
+    labels[test_idx_reorder, :] = labels[test_idx_range, :]
+
+    idx_train = range(len(y))
+    idx_val = range(len(y), len(y)+500)
+    idx_test = test_idx_range.tolist()
+
+    n = labels.shape[0]
+
+    return features, labels, adj, n, idx_train, idx_val, idx_test
+
+
+def get_training_masks(n, random_split, split_sizes, random_split_seed, add_val, add_val_seed, p_val=0.5, idx_train=None,
+                       idx_val=None, idx_test=None):
+    if random_split:
+        train_mask = []
+        val_mask = []
+        test_mask = []
+    else: # use fixed split as in planetoid
+        train_mask = sample_mask(idx_train, n)
+        val_mask = sample_mask(idx_val, n)
+        test_mask = sample_mask(idx_test, n)
+    if add_val:
+        train_mask, val_mask = add_val_to_train(train_mask, val_mask, add_val_seed, p_val)
+
+    print("**********************************************************************************************")
+    print("train size: {} val size: {} test size: {}".format(np.sum(train_mask), np.sum(val_mask), np.sum(test_mask)))
+    print("**********************************************************************************************")
+
+    return train_mask, val_mask, test_mask
+
+
+def load_data(dataset_str, random_split, split_sizes, random_split_seed, add_val, add_val_seed, p_val, active_learning):
+    """
+    Load data with fixed split as in Planetoid
+    :param dataset_str:
+    :param active_learning:
+    :return:
+    """
+    features, labels, adj, n, idx_train, idx_val, idx_test = load_base_data(dataset_str)
+    train_mask, val_mask, test_mask = get_training_masks(n, random_split, split_sizes, random_split_seed,
+                                                         add_val, add_val_seed, p_val, idx_train, idx_val, idx_test)
+
+    y_train = np.zeros(labels.shape)
+    y_val = np.zeros(labels.shape)
+    y_test = np.zeros(labels.shape)
+    y_train[train_mask, :] = labels[train_mask, :]
+    y_val[val_mask, :] = labels[val_mask, :]
+    y_test[test_mask, :] = labels[test_mask, :]
+    if active_learning:
+        t = adj.toarray()
+        sg = list(nx.connected_component_subgraphs(nx.from_numpy_matrix(t)))
+        vid_largest_graph = sg[np.argmax([nx.adjacency_matrix(g).shape[0] for g in sg])].nodes()
+        adj = t[vid_largest_graph,:]; adj = adj[:, vid_largest_graph]
+        return sp.csr_matrix(adj), sp.csr_matrix(features.toarray()[vid_largest_graph,:]), labels[vid_largest_graph]
+    else:
+        return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
+
+
 def add_val_to_train(mask_train, mask_val, seed_val, p=0.5):
     """
     Add a percentage of the validation set to the training set
@@ -152,22 +253,10 @@ def add_val_to_train(mask_train, mask_val, seed_val, p=0.5):
     return mask_train_new, mask_val_new
 
 
-def load_data_ssl(data_name, add_val=False, seed_val=1, p=0.5):
-    adj_csr, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(data_name)
-
-    if add_val:
-        train_mask, val_mask = add_val_to_train(train_mask, val_mask, seed_val, p)
-
-        print(
-            "**********************************************************************************************"
-        )
-        print(
-            "train size: {} val size: {} test size: {}".format(np.sum(train_mask), np.sum(val_mask), np.sum(test_mask)
-            )
-        )
-        print(
-            "**********************************************************************************************"
-        )
+def load_data_ssl(data_name, random_split=False, split_sizes=None, random_split_seed=1, add_val=False, add_val_seed=1, p_val=0.5):
+    adj_csr, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = \
+        load_data(dataset_str=data_name, random_split=random_split, split_sizes=split_sizes, random_split_seed=random_split_seed,
+                  add_val=add_val, add_val_seed=add_val_seed, p_val=p_val, active_learning=False)
 
     adj_mat = np.asarray(adj_csr.toarray(), dtype=np_float_type)
     x_tr = np.reshape(np.arange(len(train_mask))[train_mask], (-1, 1))

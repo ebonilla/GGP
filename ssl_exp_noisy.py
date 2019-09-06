@@ -10,18 +10,29 @@ import networkx as nx
 import pandas as pd
 import csv
 
+import click
 
 class SSLExperimentNoisy(object):
 
-    def __init__(self, data_name, random_seed, adj_name, add_val=False, seed_val=1, p=0.5, results_dir='./results'):
+    def __init__(self, data_name, adj_name,  random_seed_np, random_seed_tf, random_split, split_sizes, random_split_seed,
+                 add_val, add_val_seed, p, results_dir):
         self.data_name = data_name.lower()
-        self.random_seed = int(random_seed); np.random.seed(self.random_seed); tf.set_random_seed(self.random_seed)
+        self.random_seed = int(random_seed_np)
+        np.random.seed(self.random_seed)
+        tf.set_random_seed(random_seed_tf)
+
         self.adj_name = adj_name
         self.results_dir = results_dir
 
         # Load data
         self.adj_mat, self.node_features, self.x_tr, self.y_tr, self.x_val, self.y_val, self.x_test, self.y_test \
-            = load_data_ssl(self.data_name, add_val, seed_val, p)
+            = load_data_ssl(data_name=self.data_name,
+                            random_split=random_split,
+                            split_sizes=split_sizes,
+                            random_split_seed=random_split_seed,
+                            add_val=add_val,
+                            add_val_seed=add_val_seed,
+                            p_val=p)
 
         # loads noisy adjacency
         self.adj_mat_noisy = self.load_noisy_adjacency(self.adj_name)
@@ -46,7 +57,7 @@ class SSLExperimentNoisy(object):
             os.mkdir(self.param_fp)
 
         #self.param_fp = os.path.join(self.param_fp, 'SSL-{0}-rs_{1}.p'.format(self.data_name, random_seed))
-        self.param_fp = os.path.join(self.param_fp, os.path.basename(adj_name) + '-rs_{0}.p'.format(random_seed))
+        self.param_fp = os.path.join(self.param_fp, os.path.basename(adj_name) + '-rs_{0}.p'.format(self.random_seed))
 
         self.m._compile(self.optimizer)
         if os.path.isfile(self.param_fp):
@@ -269,28 +280,99 @@ def save_parameters(params, results_dir):
     return
 
 
+@click.command()
+@click.option(
+    "--dataset",
+    default="cora",
+    type=click.STRING,
+    help="data set name [cora|citeseer|pubmed].",
+)
+@click.option(
+    "--epochs",
+    default=10,
+    type=click.INT,
+    help="Number of epochs [int].",
+)
+@click.option(
+    "--adjacency",
+    type=click.STRING,
+    help="name of adjacency matrix file [string]",
+)
+@click.option(
+    "--random-seed-np",
+    type=click.INT,
+    help="global numpy random seed [integer]",
+)
+@click.option(
+    "--random-seed-tf",
+    type=click.INT,
+    help="global tensorflow random seed [integer]",
+)
+@click.option(
+    "--random-split/--fixed-split",
+    default=False,
+    help="Use random split (true) or fixed split (false)",
+)
+@click.option(
+    "--split-sizes",
+    default=[0.9, 0.75],
+    nargs=2,
+    type=click.FLOAT,
+    help="size of random splits",
+)
+@click.option(
+    "--random-split-seed",
+    type=click.INT,
+    default=1,
+    help="random split seed [integer]",
+)
+@click.option(
+    "--add-val/--no-add-val",
+    default=False,
+    help="Add 50% of validation for training (true) or not",
+)
+@click.option(
+    "--add-val-seed",
+    type=click.INT,
+    help="Seed for including validation data in training [integer]",
+)
+@click.option(
+    "--results-dir",
+    type=click.STRING,
+    help="name of results directory [string]",
+)
+def main(dataset,
+         epochs,
+         adjacency,
+         random_seed_np,
+         random_seed_tf,
+         random_split,
+         split_sizes,
+         random_split_seed,
+         add_val,
+         add_val_seed,
+         results_dir):
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("dataset", help="data set name [cora|citeseer|pubmed]", type=str)
-    parser.add_argument("epochs", help="Number of epochs [int]", type=int)
-    parser.add_argument("global_seed", help="random seed [integer]", type=int)
-    parser.add_argument("adjacency", help="name of adjacency matrix file [string]", type=str)
-    parser.add_argument("add_val", help="whether to add validation data for training [bool]", type=bool)
-    parser.add_argument("val_seed", help="Seed for including validation data in training [int]", type=int)
-    parser.add_argument("results_dir", help="name of results dir [string]", type=str)
+    params = click.get_current_context().params
+    save_parameters(params, results_dir)
 
-    parser = parser.parse_args()
+    exp_obj = SSLExperimentNoisy(data_name=dataset,
+                                 adj_name=adjacency,
+                                 random_seed_np=random_seed_np,
+                                 random_seed_tf=random_seed_tf,
+                                 random_split=random_split,
+                                 split_sizes=split_sizes,
+                                 random_split_seed=random_split_seed,
+                                 add_val=add_val,
+                                 add_val_seed=add_val_seed,
+                                 p=0.5,
+                                 results_dir=results_dir)
 
-    params = dict(parser._get_kwargs())
-    save_parameters(params, parser.results_dir)
+    exp_obj.train(maxiter=epochs, check_obj_every_n_iter=200)
 
-    exp_obj = SSLExperimentNoisy(parser.dataset, parser.global_seed, parser.adjacency,
-                                 parser.add_val, parser.val_seed, p=0.5,
-                                 results_dir=parser.results_dir)
-    exp_obj.train(parser.epochs, check_obj_every_n_iter=200)
-    exp_obj.evaluate(parser.results_dir)
+    exp_obj.evaluate(results_dir)
+
 
 
 if __name__ == "__main__":
-    main()
+    exit(main())  # pragma: no cover
