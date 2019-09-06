@@ -12,19 +12,11 @@
 # use e.g. sbatch -a 0-999 submit_all_noisy_experiments_bracewell.sh
 # where 0-999 are the range of the indices of the jobs
 #
-#module load cuda/10.0.130
-#module load cudnn/v7.5.0-cuda92
-#module load python/2.7.13
 
-#pip install --user tensorflow-gpu==1.14.0
-#pip install --user networkx==2.2
-
+module load cuda/10.0.130
+module load cudnn/v7.5.0-cuda92
 source ~/graphGP-env/bin/activate
 
-# THis seems like a good alternative to installing things but let's stick to Pantelis' settings so all experiments
-# are run equally
-# module load tensorflow/1.12.0-py36-gpu
-# module load cuda/10.0.130
 
 all_n_hidden='16 32'
 all_n_neighbour='8 16 32'
@@ -79,13 +71,14 @@ then
     BASENAME=$DATASET_NAME'_graph_supervised_nhidden'$N_HIDDEN'_neighbours'$N_NEIGHBOUR
     ADJ_MATRIX='Dataset/featured_based_datasets_compatible/'$DATASET_NAME'/'$BASENAME'.gpickle'
 
-    str_options=$DATASET_NAME' '$EPOCHS' '$RANDOM_SEED' '$ADJ_MATRIX' '$ADD_VAL' '$SEED_VAL
+    str_options='--dataset='$DATASET_NAME' --epochs='$EPOCHS' --adjacency='$ADJ_MATRIX' --random-seed-np='$RANDOM_SEED' --random-seed-tf='$RANDOM_SEED' --fixed-split  --add-val --add-val-seed='$SEED_VAL
+
     name=$DATASET_NAME'/'$MODEL'/feature_based''/n_hidden'$N_HIDDEN'/n_neighbour'$N_NEIGHBOUR'/v'$SEED_VAL
 
     RESULTS_DIR=$RESULTS_DIR'/'$name
     mkdir -p $RESULTS_DIR
 
-    str_options=$str_options' '$RESULTS_DIR
+    str_options=$str_options' --results-dir='$RESULTS_DIR
     echo $str_options
 
     PYTHONPATH=. python $RUN_FILE $str_options
