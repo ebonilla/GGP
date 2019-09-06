@@ -9,6 +9,45 @@ import GPflow
 float_type = GPflow.settings.dtypes.float_type
 np_float_type = np.float32 if float_type == tf.float32 else np.float64
 
+from sklearn.model_selection import StratifiedShuffleSplit
+
+
+def recursive_stratified_shuffle_split(sizes, random_state=None):
+    """
+    For usage examples please see:
+    https://github.com/stellargraph/gcn-latent-net/blob/master/notebooks/Recursive%20Stratified%20Sampling-Karate%20Club.ipynb
+    Hard coded here to handle only
+    """
+    if type(sizes) is tuple:
+        head = sizes[0]
+        tail = sizes[1]
+    else:
+        head = sizes
+        tail = None
+
+    sss = StratifiedShuffleSplit(n_splits=1, test_size=head, random_state=random_state)
+
+    def split(X, y):
+
+        a_index, b_index = next(sss.split(X, y))
+
+        yield a_index
+
+        if tail:
+
+            split_tail = recursive_stratified_shuffle_split(sizes=tail,
+                                                            random_state=random_state)
+
+            for ind in split_tail(X[b_index], y[b_index]):
+
+                yield b_index[ind]
+
+        else:
+
+            yield b_index
+
+    return split
+
 
 def dlfile(url, local_file_path):
     # Open the url
@@ -187,16 +226,23 @@ def load_base_data(dataset_str):
     return features, labels, adj, n, idx_train, idx_val, idx_test
 
 
-def get_training_masks(n, random_split, split_sizes, random_split_seed, add_val, add_val_seed, p_val=0.5, idx_train=None,
+def get_training_masks(n, X, y, random_split, split_sizes, random_split_seed, add_val, add_val_seed, p_val=0.5, idx_train=None,
                        idx_val=None, idx_test=None):
     if random_split:
-        train_mask = []
-        val_mask = []
-        test_mask = []
+        random_state = np.random.RandomState(random_split_seed)
+        split = recursive_stratified_shuffle_split(sizes=split_sizes, random_state=random_state)
+        indices = list(split(X, y))
+        idx_train = indices[0]
+        idx_val = indices[1]
+        idx_test = indices[2]
     else: # use fixed split as in planetoid
-        train_mask = sample_mask(idx_train, n)
-        val_mask = sample_mask(idx_val, n)
-        test_mask = sample_mask(idx_test, n)
+        if idx_train is None or idx_val is None or idx_test is None:
+            print("Must provide indices for fixed split")
+
+    train_mask = sample_mask(idx_train, n)
+    val_mask = sample_mask(idx_val, n)
+    test_mask = sample_mask(idx_test, n)
+
     if add_val:
         train_mask, val_mask = add_val_to_train(train_mask, val_mask, add_val_seed, p_val)
 
@@ -215,7 +261,7 @@ def load_data(dataset_str, random_split, split_sizes, random_split_seed, add_val
     :return:
     """
     features, labels, adj, n, idx_train, idx_val, idx_test = load_base_data(dataset_str)
-    train_mask, val_mask, test_mask = get_training_masks(n, random_split, split_sizes, random_split_seed,
+    train_mask, val_mask, test_mask = get_training_masks(n, features, labels, random_split, split_sizes, random_split_seed,
                                                          add_val, add_val_seed, p_val, idx_train, idx_val, idx_test)
 
     y_train = np.zeros(labels.shape)
