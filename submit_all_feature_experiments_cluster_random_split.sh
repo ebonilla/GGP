@@ -13,9 +13,9 @@
 # where 0-999 are the range of the indices of the jobs
 #
 
-#module load cuda/10.0.130
-#module load cudnn/v7.5.0-cuda92
-#source ~/graphGP-env/bin/activate
+module load cuda/10.0.130
+module load cudnn/v7.5.0-cuda92
+source ~/graphGP-env/bin/activate
 
 
 all_n_hidden='16 32'
