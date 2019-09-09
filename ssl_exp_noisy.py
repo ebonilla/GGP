@@ -148,6 +148,12 @@ class SSLExperimentNoisy(object):
         self.m.set_state(tmp_params)
         return {'train': tr_acc, 'test': test_acc}
 
+    def cleanup(self):
+        if os.path.exists(self.param_fp):
+            os.remove(self.param_fp)
+            print("Parameter file " +  self.param_fp  + " deleted")
+        else:
+            print("The file " + self.param_fp + " does not exist")
 
 def evaluate_accuracy(ytrue, ypred):
 
@@ -210,6 +216,7 @@ def write_test_predictions(ytrue, ypred, test_acc, test_mnlp, results_dir):
         return 0  # probably should return something other than success!
 
     return
+
 
 
 # def get_results_handler(results_dir, header, params):
@@ -372,6 +379,7 @@ def main(dataset,
 
     exp_obj.evaluate(results_dir)
 
+    exp_obj.cleanup()
 
 if __name__ == "__main__":
     exit(main())  # pragma: no cover
