@@ -13,9 +13,9 @@
 # where 0-999 are the range of the indices of the jobs
 #
 
-module load cuda/10.0.130
-module load cudnn/v7.5.0-cuda92
-source ~/graphGP-env/bin/activate
+#module load cuda/10.0.130
+#module load cudnn/v7.5.0-cuda92
+#source ~/graphGP-env/bin/activate
 
 EPOCHS=10000
 RUN_FILE='ssl_exp_noisy.py'
@@ -76,11 +76,15 @@ then
     BASENAME=$DATASET_NAME'_graph_supervised_nhidden'$N_HIDDEN'_neighbours'$N_NEIGHBOUR
     ADJ_MATRIX='Dataset/featured_based_datasets_compatible/'$DATASET_NAME'/'$BASENAME'.gpickle'
 
-    str_options='--dataset='$DATASET_NAME' --epochs='$EPOCHS' --adjacency='$ADJ_MATRIX' --random-seed-np='$RANDOM_SEED' --random-seed-tf='$RANDOM_SEED' --fixed-split'
+    str_options='--dataset='$DATASET_NAME' --epochs='$EPOCHS' --adjacency='$ADJ_MATRIX' --fixed-split'
 
     if [ "$ADD_VAL" = "1" ]; then
         str_options=$str_options' --add-val --add-val-seed='$SEED_VAL
+    else
+        RANDOM_SEED=$SEED_VAL
     fi
+
+    str_options=$str_options' --random-seed-np='$RANDOM_SEED' --random-seed-tf='$RANDOM_SEED
 
     name=$DATASET_NAME'/'$MODEL'/feature_based''/n_hidden'$N_HIDDEN'/n_neighbour'$N_NEIGHBOUR'/v'$SEED_VAL
 
@@ -95,5 +99,4 @@ then
 else
     echo "Error: Missing array index as SLURM_ARRAY_TASK_ID"
 fi
-
 

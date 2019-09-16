@@ -17,7 +17,7 @@ class SSLExperimentNoisy(object):
     def __init__(self, data_name, adj_name,  random_seed_np, random_seed_tf, random_split, split_sizes, random_split_seed,
                  add_val, add_val_seed, p, results_dir):
         self.data_name = data_name.lower()
-        self.random_seed = int(random_seed_np)
+        self.random_seed = random_seed_np
         np.random.seed(self.random_seed)
         tf.set_random_seed(random_seed_tf)
 
