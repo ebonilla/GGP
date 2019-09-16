@@ -17,16 +17,25 @@ module load cuda/10.0.130
 module load cudnn/v7.5.0-cuda92
 source ~/graphGP-env/bin/activate
 
+EPOCHS=10000
+RUN_FILE='ssl_exp_noisy.py'
+RANDOM_SEED=1
+ADD_VAL=0 # Add 50% validation set to training?
+
 
 all_n_hidden='16 32'
 all_n_neighbour='8 16 32'
-all_seed_val='1 10 2 20 3 30 4 40 5 50'
-
 all_dataset_name='cora citeseer'
 all_model='ggp'
 
+if [ "$ADD_VAL" = "1" ]; then
+    all_seed_val='1 10 2 20 3 30 4 40 5 50'
+else
+    all_seed_val='1 2 3 4 5 6 7 8 9 10'
+fi
 
-RESULTS_DIR=$SCRATCH1DIR'/fixed_splits' # output for tensorboard
+
+RESULTS_DIR=$SCRATCH1DIR'/'$all_model'/fixed_splits' # output for tensorboard
 
 # Creates all the experiments settings into a single big array
 c=0
@@ -52,10 +61,6 @@ do
     done
 done
 
-EPOCHS=10000
-RUN_FILE='ssl_exp_noisy.py'
-RANDOM_SEED=1
-ADD_VAL=1
 
 
 # Submit job
@@ -71,7 +76,11 @@ then
     BASENAME=$DATASET_NAME'_graph_supervised_nhidden'$N_HIDDEN'_neighbours'$N_NEIGHBOUR
     ADJ_MATRIX='Dataset/featured_based_datasets_compatible/'$DATASET_NAME'/'$BASENAME'.gpickle'
 
-    str_options='--dataset='$DATASET_NAME' --epochs='$EPOCHS' --adjacency='$ADJ_MATRIX' --random-seed-np='$RANDOM_SEED' --random-seed-tf='$RANDOM_SEED' --fixed-split  --add-val --add-val-seed='$SEED_VAL
+    str_options='--dataset='$DATASET_NAME' --epochs='$EPOCHS' --adjacency='$ADJ_MATRIX' --random-seed-np='$RANDOM_SEED' --random-seed-tf='$RANDOM_SEED' --fixed-split'
+
+    if [ "$ADD_VAL" = "1" ]; then
+        str_options=$str_options' --add-val --add-val-seed='$SEED_VAL
+    fi
 
     name=$DATASET_NAME'/'$MODEL'/feature_based''/n_hidden'$N_HIDDEN'/n_neighbour'$N_NEIGHBOUR'/v'$SEED_VAL
 
