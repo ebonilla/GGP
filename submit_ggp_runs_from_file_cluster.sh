@@ -19,7 +19,7 @@ module load cuda/10.0.130
 module load cudnn/v7.5.0-cuda92
 source ~/graphGP-env/bin/activate
 
-IFS=$'\n' read -d '' -r -a lines < experiments/runs-knngraph-ggp.txt
+IFS=$'\n' read -d '' -r -a lines < runs-knngraph-ggp.txt
 
 # Submit job
 if [ ! -z "$SLURM_ARRAY_TASK_ID" ]
