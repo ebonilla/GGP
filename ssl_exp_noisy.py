@@ -12,10 +12,27 @@ import csv
 
 import click
 
+import config as cfg
+
+from sklearn.neighbors import kneighbors_graph
+
 class SSLExperimentNoisy(object):
 
-    def __init__(self, data_name, adj_name,  random_seed_np, random_seed_tf, random_split, split_sizes, random_split_seed,
-                 add_val, add_val_seed, p, results_dir):
+    def __init__(self,
+                 data_name,
+                 adj_name,
+                 random_seed_np,
+                 random_seed_tf,
+                 random_split,
+                 split_sizes,
+                 random_split_seed,
+                 add_val,
+                 add_val_seed,
+                 p,
+                 use_knn_graph,
+                 knn_metric,
+                 knn_k,
+                 results_dir):
         self.data_name = data_name.lower()
         self.random_seed = random_seed_np
         np.random.seed(self.random_seed)
@@ -34,8 +51,22 @@ class SSLExperimentNoisy(object):
                             add_val_seed=add_val_seed,
                             p_val=p)
 
-        # loads noisy adjacency
-        self.adj_mat_noisy = self.load_noisy_adjacency(self.adj_name)
+        self.param_fp = os.path.join(self.results_dir, 'ssl_param_files')
+        if not (os.path.isdir(self.param_fp)):
+            os.mkdir(self.param_fp)
+        self.param_fp = os.path.join(self.param_fp, 'ggp-param.p'.format(self.random_seed))
+
+        if adj_name is not None:
+            # loads noisy adjacency
+            self.adj_mat_noisy = self.load_noisy_adjacency(self.adj_name)
+        elif use_knn_graph:
+            print("Using KNN graph")
+            tf.logging.info("Using KNN graph")
+            g_ = kneighbors_graph(self.node_features, knn_k, metric=knn_metric)
+            self.adj_mat_noisy = np.array(g_.todense(), dtype=np.float32)
+        else:
+            self.adj_mat_noisy = self.adj_mat
+
 
         # Init kernel
         k = SparseGraphPolynomial(self.adj_mat_noisy, self.node_features, self.x_tr, degree=3.)
@@ -51,13 +82,10 @@ class SSLExperimentNoisy(object):
         # Define housekeeping variables
         self.last_ts = time.time()
         self.iter = 0; self.check_obj_every = 200
-        self.log_iter = []; self.log_t = []; self.log_obj = []; self.log_param = None; self.log_opt_state = None;
-        self.param_fp = os.path.join(self.results_dir, 'ssl_param_files')
-        if not (os.path.isdir(self.param_fp)):
-            os.mkdir(self.param_fp)
+        self.log_iter = []; self.log_t = []; self.log_obj = []; self.log_param = None; self.log_opt_state = None
 
-        #self.param_fp = os.path.join(self.param_fp, 'SSL-{0}-rs_{1}.p'.format(self.data_name, random_seed))
-        self.param_fp = os.path.join(self.param_fp, os.path.basename(adj_name) + '-rs_{0}.p'.format(self.random_seed))
+
+
 
         self.m._compile(self.optimizer)
         if os.path.isfile(self.param_fp):
@@ -334,14 +362,36 @@ def save_parameters(params, results_dir):
     help="random split seed [integer]",
 )
 @click.option(
-    "--add-val/--no-add-val",
-    default=False,
-    help="Add 50% of validation for training (true) or not",
+    "--use-half-val-to-train/--no-use-half-val-to-train",
+    default=cfg.USE_HALF_VAL_TO_TRAIN,
+    help="Use half the validation data in training.",
+)
+@click.option("-s", "--seed", default=cfg.SEED, type=click.INT, help="Random seed")
+@click.option(
+    "-s", "--seed-np", default=cfg.SEED_NP, type=click.INT, help="Random seed for numpy"
 )
 @click.option(
-    "--add-val-seed",
+    "--seed-val",
+    default=cfg.SEED_VAL,
     type=click.INT,
-    help="Seed for including validation data in training [integer]",
+    help="Random seed for splitting the validation set",
+)
+@click.option(
+    "--use-knn-graph/--no-use-knn-graph",
+    default=False,
+    help="Use half the validation data in training.",
+)
+@click.option(
+    "--knn-metric",
+    default=cfg.DEFAULT_KNN_METRIC,
+    type=click.Choice(cfg.KNN_METRICS),
+    help="Default knn metric to use for building prior"
+)
+@click.option(
+    "--knn-k",
+    default=cfg.DEFAULT_KNN_K,
+    type=click.INT,
+    help="Default number of neighbours for KNN prior.",
 )
 @click.option(
     "--results-dir",
@@ -356,9 +406,17 @@ def main(dataset,
          random_split,
          split_sizes,
          random_split_seed,
-         add_val,
-         add_val_seed,
+         use_half_val_to_train,
+         seed,
+         seed_np,
+         seed_val,
+         use_knn_graph,
+         knn_metric,
+         knn_k,
          results_dir):
+
+    tf.random.set_random_seed(seed)
+    random_state = np.random.RandomState(seed_np)
 
     params = click.get_current_context().params
     save_parameters(params, results_dir)
@@ -370,9 +428,12 @@ def main(dataset,
                                  random_split=random_split,
                                  split_sizes=split_sizes,
                                  random_split_seed=random_split_seed,
-                                 add_val=add_val,
-                                 add_val_seed=add_val_seed,
+                                 add_val=use_half_val_to_train,
+                                 add_val_seed=seed_val,
                                  p=0.5,
+                                 use_knn_graph=use_knn_graph,
+                                 knn_metric=knn_metric,
+                                 knn_k=knn_k,
                                  results_dir=results_dir)
 
     exp_obj.train(maxiter=epochs, check_obj_every_n_iter=200)
