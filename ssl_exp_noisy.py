@@ -325,7 +325,7 @@ def save_parameters(params, results_dir):
 )
 @click.option(
     "--epochs",
-    default=10,
+    default=5000,
     type=click.INT,
     help="Number of epochs [int].",
 )
