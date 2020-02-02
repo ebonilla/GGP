@@ -345,16 +345,6 @@ def save_parameters(params, results_dir):
     help="name of adjacency matrix file [string]",
 )
 @click.option(
-    "--random-seed-np",
-    type=click.INT,
-    help="global numpy random seed [integer]",
-)
-@click.option(
-    "--random-seed-tf",
-    type=click.INT,
-    help="global tensorflow random seed [integer]",
-)
-@click.option(
     "--random-split/--fixed-split",
     default=False,
     help="Use random split (true) or fixed split (false)",
@@ -377,10 +367,8 @@ def save_parameters(params, results_dir):
     default=cfg.USE_HALF_VAL_TO_TRAIN,
     help="Use half the validation data in training.",
 )
-@click.option("-s", "--seed", default=cfg.SEED, type=click.INT, help="Random seed")
-@click.option(
-    "-s", "--seed-np", default=cfg.SEED_NP, type=click.INT, help="Random seed for numpy"
-)
+@click.option("--seed", default=cfg.SEED, type=click.INT, help="Random seed")
+@click.option("--seed-np", default=cfg.SEED_NP, type=click.INT, help="Random seed for numpy")
 @click.option(
     "--seed-val",
     default=cfg.SEED_VAL,
@@ -413,8 +401,6 @@ def main(name,
          dataset,
          epochs,
          adjacency,
-         random_seed_np,
-         random_seed_tf,
          random_split,
          split_sizes,
          random_split_seed,
@@ -435,8 +421,8 @@ def main(name,
 
     exp_obj = SSLExperimentNoisy(data_name=dataset,
                                  adj_name=adjacency,
-                                 random_seed_np=random_seed_np,
-                                 random_seed_tf=random_seed_tf,
+                                 random_seed_np=seed_np,
+                                 random_seed_tf=seed_np,
                                  random_split=random_split,
                                  split_sizes=split_sizes,
                                  random_split_seed=random_split_seed,
