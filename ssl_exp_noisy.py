@@ -154,24 +154,34 @@ class SSLExperimentNoisy(object):
         self.m.set_state(pickle.load(open(self.param_fp, 'rb'))['log_param'])
         pred_train = self.m.predict_y(self.x_tr)[0]
         pred_test = self.m.predict_y(self.x_test)[0]
+        pred_val = self.m.predict_y(self.x_val)[0]
+
         ytrain =  self.y_tr.flatten()
         ytest = self.y_test.flatten()
+        yval = self.y_val.flatten()
 
         tr_acc = evaluate_accuracy(ytrain, pred_train)
+        val_acc = evaluate_accuracy(yval, pred_val)
         test_acc = evaluate_accuracy(ytest, pred_test)
+
 
         tr_mnlp = evaluate_mnlp(ytrain, pred_train)
         test_mnlp = evaluate_mnlp(ytest, pred_test)
 
         print 'Prediction metrics: '
         print '\tTraining Accuracy: {0:.4f}'.format(tr_acc)
+        print '\tValidation Accuracy: {0:.4f}'.format(val_acc)
         print '\tTest Accuracy: {0:.4f}'.format(test_acc)
         print '\tTraining MNLP: {0:.4f}'.format(tr_mnlp)
         print '\tTest MNLP: {0:.4f}'.format(test_mnlp)
 
         #fout = os.path.basename(self.adj_name) + "_seed_" + str(self.random_seed)
 
-        write_test_predictions(ytest, pred_test, test_acc, test_mnlp, results_dir)
+        write_test_predictions(ytest, pred_test,
+                               val_acc=val_acc,
+                               test_acc=test_acc,
+                               test_mnlp=test_mnlp,
+                               results_dir=results_dir)
         # Revert the parameters to the original values
         self.m.set_state(tmp_params)
         return {'train': tr_acc, 'test': test_acc}
@@ -205,7 +215,7 @@ def evaluate_mnlp(ytrue, ypred):
     return - np.mean(np.log(probs))
 
 
-def write_test_predictions(ytrue, ypred, test_acc, test_mnlp, results_dir):
+def write_test_predictions(ytrue, ypred, val_acc, test_acc, test_mnlp, results_dir):
     """
     :param ytrue: Nx1 array of labels. ytrue \in [0, K-1], where K=# classes
     :param ypred: NxK array of predicted probabilities
@@ -231,12 +241,12 @@ def write_test_predictions(ytrue, ypred, test_acc, test_mnlp, results_dir):
     df.to_csv(predictions_filename, index=None)
 
     perf_filename = os.path.join(os.path.expanduser(results_dir), "results.csv")
-    header = "accuracy_test,  mnlp_test"
+    header = "accuracy_val, accuracy_test, mnlp_test"
 
     try:
         fh_results = open(perf_filename, "w", buffering=1)
         fh_results.write(header + "\n")
-        results_str = "{:04f}, {:04f}\n".format(test_acc, test_mnlp)
+        results_str = "{:04f}, {:04f}, {:04f}\n".format(val_acc, test_acc, test_mnlp)
         fh_results.write(results_str)
 
     except IOError:
