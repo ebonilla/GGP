@@ -59,6 +59,7 @@ class SSLExperimentNoisy(object):
         if adj_name is not None:
             # loads noisy adjacency
             self.adj_mat_noisy = self.load_noisy_adjacency(self.adj_name)
+            print("adjacency loaded from " + self.adj_name)
         elif use_knn_graph:
             print("Using KNN graph")
             tf.logging.info("Using KNN graph")
