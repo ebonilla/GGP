@@ -6,6 +6,11 @@ import scipy.sparse as sp, numpy as np, pickle as pkl, networkx as nx, tensorflo
 from sklearn.feature_extraction.text import TfidfTransformer
 from urllib2 import urlopen, URLError, HTTPError
 import GPflow
+
+from scipy.sparse import coo_matrix
+import pandas as pd
+
+
 float_type = GPflow.settings.dtypes.float_type
 np_float_type = np.float32 if float_type == tf.float32 else np.float64
 
@@ -253,6 +258,36 @@ def get_training_masks(n, X, y, random_split, split_sizes, random_split_seed, ad
     return train_mask, val_mask, test_mask
 
 
+def load_polblogs(data_home="Dataset/polblogs_compatible"):
+
+    # load the graph
+    g_nx = nx.read_gpickle(os.path.join(data_home, "polblogs_graph.gpickle"))
+
+    # Load the labels
+    y_all = np.load(os.path.join(data_home, "polblogs_labels.npy"))
+
+    df_y = pd.DataFrame({"a": y_all, "b": 1 - y_all})
+    y_all = df_y.values
+
+    X_all = np.eye(g_nx.number_of_nodes())
+
+    print("y_all shape {}".format(y_all.shape))
+    print("X_all shape {}".format(X_all.shape))
+
+    # Extract the adjacency matrix.
+    # A should be scipy sparse matrix
+    print("Extracting A from networkx graph")
+    A = nx.to_scipy_sparse_matrix(g_nx, format="coo", dtype=np.int)
+    # Remove self loops and set maximum value to 1
+    adj = A.todense()
+    adj[adj>1] = 1
+    np.fill_diagonal(adj, 0)
+    # convert back to scipy sparse matrix
+    A = coo_matrix(adj)
+    print("...Done")
+
+    return X_all, y_all, A
+
 def load_data(dataset_str, random_split, split_sizes, random_split_seed, add_val, add_val_seed, p_val, active_learning):
     """
     Load data with fixed split as in Planetoid
@@ -260,7 +295,16 @@ def load_data(dataset_str, random_split, split_sizes, random_split_seed, add_val
     :param active_learning:
     :return:
     """
-    features, labels, adj, n, idx_train, idx_val, idx_test = load_base_data(dataset_str)
+    if dataset_str == 'polblogs':
+        features, labels, adj = load_polblogs()
+        features = sp.lil_matrix(features)
+        n, d = features.shape
+        idx_train = None
+        idx_val = None
+        idx_test = None
+    else:
+        features, labels, adj, n, idx_train, idx_val, idx_test = load_base_data(dataset_str)
+
     train_mask, val_mask, test_mask = get_training_masks(n, features, labels, random_split, split_sizes, random_split_seed,
                                                          add_val, add_val_seed, p_val, idx_train, idx_val, idx_test)
 
