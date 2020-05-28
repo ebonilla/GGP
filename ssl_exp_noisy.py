@@ -10,6 +10,7 @@ import networkx as nx
 import pandas as pd
 import csv
 
+import sys
 import click
 
 import config as cfg
@@ -92,6 +93,7 @@ class SSLExperimentNoisy(object):
         if os.path.isfile(self.param_fp):
             print 'Param. file already exists! Loading from {0}.'.format(self.param_fp)
             self.load_snapshot(self.param_fp)
+            self.evaluate(results_dir)
         else:
             self.save_snapshot(self.param_fp, update_before_saving=True)
 
@@ -253,6 +255,10 @@ def write_test_predictions(ytrue, ypred, val_acc, test_acc, test_mnlp, results_d
     except IOError:
         print("Could not open results file {}".format(perf_filename))
         return 0  # probably should return something other than success!
+
+
+    # !!!!! DELETE ME !!!!
+    # sys.exit()
 
     return
 
