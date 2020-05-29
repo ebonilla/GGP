@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=01:00:00
+#SBATCH --time=04:00:00
 #SBATCH --mem=8GB
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
@@ -19,7 +19,7 @@ module load cuda/10.0.130
 module load cudnn/v7.5.0-cuda92
 source ~/graphGP-env/bin/activate
 
-IFS=$'\n' read -d '' -r -a lines < runs_ggp_ground_truth_graph.txt
+IFS=$'\n' read -d '' -r -a lines < runs_ggp_ground_truth_graphs.txt
 
 # Submit job
 if [ ! -z "$SLURM_ARRAY_TASK_ID" ]
