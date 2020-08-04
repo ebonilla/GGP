@@ -8,8 +8,20 @@ from GPflow._settings import settings
 import tensorflow as tf
 float_type = settings.dtypes.float_type
 
+
 class GraphSVGP(SVGP):
     # Does not support Minibatch
+
+    def __init__(self, X, Y, kern, likelihood, Z,
+                 num_latent=None, q_diag=False, whiten=True, minibatch_size=None, jitter_level=None):
+
+        SVGP.__init__(self, X, Y, kern, likelihood, Z, num_latent=num_latent,
+                      q_diag=q_diag, whiten=whiten, minibatch_size=minibatch_size)
+        if jitter_level is None:
+            self.jitter_level = settings.numerics.jitter_level
+        else:
+            self.jitter_level = jitter_level
+
     def build_likelihood(self):
         """
         This gives a variational bound on the model likelihood.
@@ -30,7 +42,7 @@ class GraphSVGP(SVGP):
         num_data = tf.shape(self.Z)[0]  # M
         num_func = tf.shape(f)[1]  # K
         Kmn = kern.Kzx(self.Z, self.X)
-        Kmm = kern.Kzz(self.Z) + tf.eye(num_data, dtype=float_type) * settings.numerics.jitter_level
+        Kmm = kern.Kzz(self.Z) + tf.eye(num_data, dtype=float_type) * self.jitter_level
         Lm = tf.cholesky(Kmm)
         # Compute the projection matrix A
         A = tf.matrix_triangular_solve(Lm, Kmn, lower=True)

@@ -33,6 +33,7 @@ class SSLExperimentNoisy(object):
                  use_knn_graph,
                  knn_metric,
                  knn_k,
+                 jitter_level,
                  results_dir):
         self.data_name = data_name.lower()
         self.random_seed = random_seed_np
@@ -80,7 +81,8 @@ class SSLExperimentNoisy(object):
         self.optimizer = tf.train.AdamOptimizer(0.0005)
         # Init model
         self.m = GraphSVGP(self.x_tr, self.y_tr, k, GPflow.likelihoods.MultiClass(len(np.unique(self.y_tr))), ind_points,
-                      num_latent=len(np.unique(self.y_tr)), minibatch_size=len(self.x_tr), whiten=True, q_diag=False)
+                      num_latent=len(np.unique(self.y_tr)), minibatch_size=len(self.x_tr), whiten=True, q_diag=False,
+                           jitter_level=jitter_level)
         # Define housekeeping variables
         self.last_ts = time.time()
         self.iter = 0; self.check_obj_every = 200
@@ -400,6 +402,12 @@ def save_parameters(params, results_dir):
     help="Default number of neighbours for KNN prior.",
 )
 @click.option(
+    "--jitter-level",
+    default=None, # None uses default GPflow jitter level
+    type=click.FLOAT,
+    help="Jitter level.",
+)
+@click.option(
     "--results-dir",
     type=click.STRING,
     help="name of results directory [string]",
@@ -418,6 +426,7 @@ def main(name,
          use_knn_graph,
          knn_metric,
          knn_k,
+         jitter_level,
          results_dir):
 
     tf.random.set_random_seed(seed)
@@ -439,6 +448,7 @@ def main(name,
                                  use_knn_graph=use_knn_graph,
                                  knn_metric=knn_metric,
                                  knn_k=knn_k,
+                                 jitter_level=jitter_level,
                                  results_dir=results_dir)
 
     exp_obj.train(maxiter=epochs, check_obj_every_n_iter=200)
